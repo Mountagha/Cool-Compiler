@@ -51,6 +51,16 @@ extern YYSTYPE cool_yylval;
 
 DARROW          =>
 
+delim         [ \n\f\t\v\r]
+ws            {delim}+
+digit         [0-9]
+letter        [A-Za-z]
+number        {digit}+
+lower         [a-z]
+upper         [A-Z]
+id            []
+
+
 %%
 
  /*

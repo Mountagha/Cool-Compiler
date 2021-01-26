@@ -55,12 +55,14 @@ delim         [ \n\f\t\v\r]
 ws            {delim}+
 digit         [0-9]
 letter        [A-Za-z]
+alphanum      [A-Za-z0-9_]
 number        {digit}+
 lower         [a-z]
 upper         [A-Z]
-id            []
-
-
+type_id       {upper}{alphanum}*
+type_t_id     {lowe{upper}{alphanum}*
+object_id
+[{lower}{alphaum}*
 %%
 
  /*
@@ -77,14 +79,26 @@ id            []
   * Keywords are case-insensitive except for the values true and false,
   * which must begin with a lower-case letter.
   */
+(?i:class)  { return (CLASS); }
+(?i)else)    { return (ELSE); }
+(?i:fi)      { return (FI); }
+(?i:if)      { return (IF; }
+(?i:in)      { return (IN); }
+(?i:inherits) { return (INHERITS); }
+(?i:isvoid) { return(ISVOID); }
+(?i:let) { return (LET); }
+(?i:loop) { return (LOOP); }
+(?i:pool) { return (POOL); }
+(?i:then) { return (THEN); }
+(?i:while) { return (WHILE); }
+(?i:case) { return (CASE); }
+(?i:esac) { return (ESAC); } 
+ (?i:new) { return (NEW); }
+(?i:of) { return (OF); }
+(?i:not) { return (NOT); }
+t(?i:rue) { return (TRUE); }
+f(?i:alse) { return (FALSE); }
 
-
- /*
-  *  String constants (C syntax)
-  *  Escape sequence \c is accepted for all characters c. Except for 
-  *  \n \t \b \f, the result is c.
-  *
-  */
 
 
 %%

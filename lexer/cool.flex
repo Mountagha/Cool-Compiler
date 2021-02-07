@@ -42,6 +42,10 @@ extern YYSTYPE cool_yylval;
 /*
  *  Add Your own definitions here
  */
+ 
+ void clean_buf();
+ int close_comment_stack = 0; /* to handle nested comments */
+ int len_string;
 
 %}
 
@@ -55,14 +59,20 @@ delim         [ \n\f\t\v\r]
 ws            {delim}+
 digit         [0-9]
 letter        [A-Za-z]
-alphanum      [A-Za-z0-9_]
+part_id       [A-Za-z0-9_]
 number        {digit}+
 lower         [a-z]
 upper         [A-Z]
-type_id       {upper}{alphanum}*
-type_t_id     {lowe{upper}{alphanum}*
-object_id
-[{lower}{alphaum}*
+type_id       {upper}{part_id}*
+object_id     {lower}{part_id}*
+symbol        [\+\-\*\/\~\(\)\{\}\=\@]
+
+%x STRING
+%x ESC_CHAR
+%x DASH_COM
+%x NESTED_COM
+
+     
 %%
 
  /*
@@ -80,7 +90,7 @@ object_id
   * which must begin with a lower-case letter.
   */
 (?i:class)  { return (CLASS); }
-(?i)else)    { return (ELSE); }
+(?i:else)    { return (ELSE); }
 (?i:fi)      { return (FI); }
 (?i:if)      { return (IF; }
 (?i:in)      { return (IN); }
@@ -96,9 +106,112 @@ object_id
  (?i:new) { return (NEW); }
 (?i:of) { return (OF); }
 (?i:not) { return (NOT); }
-t(?i:rue) { return (TRUE); }
-f(?i:alse) { return (FALSE); }
+t(?i:rue) { cool_yylval.boolean = true; return (BOOL_CONST); }
+f(?i:alse) { cool_yylval.boolean = false; return (BOOL_CONST); }
+
+"<=" { return (LE); }
+"<"  { return (LT); }
+"<-" { retrun (ASSIGN); }
+{symbol} return { yytext[0]; }
 
 
+
+{number} {
+    cool_yylval.symbol = inttable.add(yytext);
+    return (INT_CONST);
+}
+{type_id} {
+    cool_yylval.symbol = stringtable.add(yytext);
+    return (TYPEID);
+}
+{object_id} {
+    cool_yylval.symbol = stringtable.add(yytext);
+    return (OBJECT_ID);
+}
+
+
+\" {
+    string_buf_ptr = string_buf;
+    len_string = 0; 
+    BEGIN(STRING); }
+
+<STRING>\"  {
+    cool_yylval.symbol = stringtable.add_string(string_buf_ptr);
+    clean_buf();
+    BEGIN(INITIAL);
+    return STR_CONST;
+}
+<STRING>\n {
+    cool_yylval.error = "Unterminated string constant";
+    clean_buf();
+    curr_lineno++;
+    return ERROR;
+}
+<STRING>\0 {
+    cool_yylval.error = "String contains null character";
+    clean_buf();
+    return ERROR;
+}
+<STRING><<EOF>> {
+    cool_yylval = "EOF in string constant";
+    clean_buf();
+    return ERROR;
+}
+<STRING>. {
+    ++len_string;
+    if(len_string + 1>= MAX_CONST_STR){
+        cool_yylval.error = "String constant too long";
+        return ERROR;
+    } else {
+        strcat(string_buf, yytext);
+    }
+}
+
+
+"--" { BEGIN(DASH_COM); }
+
+<DASH_COM>\n {
+    curr_lineno++;
+    BEGIN(INITIAL);
+}
+<DASH_COM><<EOF>> {
+    BEGIN(INITIAL);
+}
+<DASH_COM>. {}
+
+
+"(*" {
+    BEGIN(NESTED_COM);
+    ++close_comment_stack;
+}
+<NESTED_COM>"(*" {
+    ++close_comment_stack;
+}
+<NESTED_COM>"*)" {
+    --close_comment_stack;
+    if(close_comment_stack == 0)
+        BEGIN(INITIAL);
+}
+<NESTED_COM>\n {
+    curr_lineno++;
+}
+<NESTED_COM>.  {}
+
+"*)" {
+    cool_yylval.error = "Unmatched *)";
+    return ERROR;
+}
+
+
+\n    { curr_lineno++; }
+{ws}  {} 
+.   {
+    cool_yylval.error = yytext;
+    return (ERROR); 
+} 
 
 %%
+
+void clean_buf(){
+    *string_buf_ptr = '\0';
+}

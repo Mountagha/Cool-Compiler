@@ -65,7 +65,7 @@ lower         [a-z]
 upper         [A-Z]
 type_id       {upper}{part_id}*
 object_id     {lower}{part_id}*
-symbol        [\+\-\*\/\~\(\)\{\}\=\@]
+symbol        [\+\-\*\/\~\(\)\{\}\=\@\<]
 
 %x STRING
 %x ESC_CHAR
@@ -92,7 +92,7 @@ symbol        [\+\-\*\/\~\(\)\{\}\=\@]
 (?i:class)  { return (CLASS); }
 (?i:else)    { return (ELSE); }
 (?i:fi)      { return (FI); }
-(?i:if)      { return (IF; }
+(?i:if)      { return (IF); }
 (?i:in)      { return (IN); }
 (?i:inherits) { return (INHERITS); }
 (?i:isvoid) { return(ISVOID); }
@@ -110,23 +110,22 @@ t(?i:rue) { cool_yylval.boolean = true; return (BOOL_CONST); }
 f(?i:alse) { cool_yylval.boolean = false; return (BOOL_CONST); }
 
 "<=" { return (LE); }
-"<"  { return (LT); }
-"<-" { retrun (ASSIGN); }
-{symbol} return { yytext[0]; }
+"<-" { return (ASSIGN); }
+{symbol} { return yytext[0]; }
 
 
 
 {number} {
-    cool_yylval.symbol = inttable.add(yytext);
+    cool_yylval.symbol = inttable.add_string(yytext);
     return (INT_CONST);
 }
 {type_id} {
-    cool_yylval.symbol = stringtable.add(yytext);
+    cool_yylval.symbol = stringtable.add_string(yytext);
     return (TYPEID);
 }
 {object_id} {
-    cool_yylval.symbol = stringtable.add(yytext);
-    return (OBJECT_ID);
+    cool_yylval.symbol = stringtable.add_string(yytext);
+    return (OBJECTID);
 }
 
 
@@ -142,25 +141,25 @@ f(?i:alse) { cool_yylval.boolean = false; return (BOOL_CONST); }
     return STR_CONST;
 }
 <STRING>\n {
-    cool_yylval.error = "Unterminated string constant";
+    cool_yylval.error_msg = "Unterminated string constant";
     clean_buf();
     curr_lineno++;
     return ERROR;
 }
 <STRING>\0 {
-    cool_yylval.error = "String contains null character";
+    cool_yylval.error_msg = "String contains null character";
     clean_buf();
     return ERROR;
 }
 <STRING><<EOF>> {
-    cool_yylval = "EOF in string constant";
+    cool_yylval.error_msg = "EOF in string constant";
     clean_buf();
     return ERROR;
 }
 <STRING>. {
     ++len_string;
-    if(len_string + 1>= MAX_CONST_STR){
-        cool_yylval.error = "String constant too long";
+    if(len_string + 1 >= MAX_STR_CONST){
+        cool_yylval.error_msg = "String constant too long";
         return ERROR;
     } else {
         strcat(string_buf, yytext);
@@ -198,7 +197,7 @@ f(?i:alse) { cool_yylval.boolean = false; return (BOOL_CONST); }
 <NESTED_COM>.  {}
 
 "*)" {
-    cool_yylval.error = "Unmatched *)";
+    cool_yylval.error_msg = "Unmatched *)";
     return ERROR;
 }
 
@@ -206,7 +205,7 @@ f(?i:alse) { cool_yylval.boolean = false; return (BOOL_CONST); }
 \n    { curr_lineno++; }
 {ws}  {} 
 .   {
-    cool_yylval.error = yytext;
+    cool_yylval.error_msg = yytext;
     return (ERROR); 
 } 
 

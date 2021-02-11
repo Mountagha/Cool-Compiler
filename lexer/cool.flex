@@ -65,12 +65,13 @@ lower         [a-z]
 upper         [A-Z]
 type_id       {upper}{part_id}*
 object_id     {lower}{part_id}*
-symbol        [\+\-\*\/\~\(\)\{\}\=\@\<]
+symbol        [\.\;\,\+\-\*\/\~\(\)\{\}\=\@\<\:]
 
 %x STRING
 %x ESC_CHAR
 %x DASH_COM
 %x NESTED_COM
+%x RESUM_STRING
 
      
 %%
@@ -127,7 +128,7 @@ f(?i:alse) { cool_yylval.boolean = false; return (BOOL_CONST); }
     cool_yylval.symbol = stringtable.add_string(yytext);
     return (OBJECTID);
 }
-
+    /* **************** Beginning of string lexing *************** */
 
 \" {
     string_buf_ptr = string_buf;
@@ -149,23 +150,39 @@ f(?i:alse) { cool_yylval.boolean = false; return (BOOL_CONST); }
 <STRING>\0 {
     cool_yylval.error_msg = "String contains null character";
     clean_buf();
+    BEGIN(RESUM_STRING);
     return ERROR;
 }
 <STRING><<EOF>> {
     cool_yylval.error_msg = "EOF in string constant";
     clean_buf();
+    BEGIN(INITIAL);
     return ERROR;
 }
 <STRING>. {
     ++len_string;
     if(len_string + 1 >= MAX_STR_CONST){
         cool_yylval.error_msg = "String constant too long";
+        BEGIN(RESUM_STRING);
         return ERROR;
     } else {
         strcat(string_buf, yytext);
     }
 }
+<RESUM_STRING>\" {
+    BEGIN(INITIAL);
+}
+<RESUM_STRING>\n {
+    curr_lineno++;
+    BEGIN(INITIAL);
+}
+    /* if the new line is escaped we still inside the string */
+<RESUM_STRING>\\\n {
+    curr_lineno++;
+}
+<RESUM_STRING>. {}
 
+    /* ***************** Dashed comments *********************** */
 
 "--" { BEGIN(DASH_COM); }
 
@@ -178,6 +195,7 @@ f(?i:alse) { cool_yylval.boolean = false; return (BOOL_CONST); }
 }
 <DASH_COM>. {}
 
+    /* ************** Nested comments ********************** */
 
 "(*" {
     BEGIN(NESTED_COM);
@@ -194,6 +212,9 @@ f(?i:alse) { cool_yylval.boolean = false; return (BOOL_CONST); }
 <NESTED_COM>\n {
     curr_lineno++;
 }
+<NESTED_COM><<EOF>> {
+    BEGIN(INITIAL);
+}
 <NESTED_COM>.  {}
 
 "*)" {
@@ -201,8 +222,10 @@ f(?i:alse) { cool_yylval.boolean = false; return (BOOL_CONST); }
     return ERROR;
 }
 
+    /* **************** others ************ */
 
 \n    { curr_lineno++; }
+
 {ws}  {} 
 .   {
     cool_yylval.error_msg = yytext;

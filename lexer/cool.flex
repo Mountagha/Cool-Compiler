@@ -44,10 +44,12 @@ extern YYSTYPE cool_yylval;
  */
  
  void clean_buf();
- int close_comment_stack = 0; /* to handle nested comments */
+ int close_comment_stack; /* to handle nested comments */
  int len_string;
 
 %}
+
+%option noyywrap
 
 /*
  * Define names for regular expressions here.
@@ -68,7 +70,6 @@ object_id     {lower}{part_id}*
 symbol        [\.\;\,\+\-\*\/\~\(\)\{\}\=\@\<\:]
 
 %x STRING
-%x ESC_CHAR
 %x DASH_COM
 %x NESTED_COM
 %x RESUM_STRING
@@ -97,7 +98,7 @@ symbol        [\.\;\,\+\-\*\/\~\(\)\{\}\=\@\<\:]
 (?i:if)      { return (IF); }
 (?i:in)      { return (IN); }
 (?i:inherits) { return (INHERITS); }
-(?i:isvoid) { return(ISVOID); }
+(?i:isvoid) { return (ISVOID); }
 (?i:let) { return (LET); }
 (?i:loop) { return (LOOP); }
 (?i:pool) { return (POOL); }
@@ -141,6 +142,7 @@ f(?i:alse) { cool_yylval.boolean = false; return (BOOL_CONST); }
     BEGIN(INITIAL);
 }
 <DASH_COM><<EOF>> {
+    curr_lineno++;
     BEGIN(INITIAL);
 }
 <DASH_COM>. {}
@@ -149,21 +151,23 @@ f(?i:alse) { cool_yylval.boolean = false; return (BOOL_CONST); }
 
 "(*" {
     BEGIN(NESTED_COM);
-    ++close_comment_stack;
+    close_comment_stack = 1;
 }
 <NESTED_COM>"(*" {
     ++close_comment_stack;
+}
+<NESTED_COM><<EOF>> {
+    cool_yylval.error_msg = "EOF in comment";
+    BEGIN(INITIAL);
+    return ERROR;
+}
+<NESTED_COM>\n {
+    curr_lineno++;
 }
 <NESTED_COM>"*)" {
     --close_comment_stack;
     if(close_comment_stack == 0)
         BEGIN(INITIAL);
-}
-<NESTED_COM>\n {
-    curr_lineno++;
-}
-<NESTED_COM><<EOF>> {
-    BEGIN(INITIAL);
 }
 <NESTED_COM>.  {}
 
@@ -177,22 +181,16 @@ f(?i:alse) { cool_yylval.boolean = false; return (BOOL_CONST); }
     /* **************** Beginning of string lexing *************** */
 
 \" {
-    string_buf_ptr = string_buf;
+    /* string_buf_ptr = string_buf; */
     len_string = 0; 
     BEGIN(STRING); 
 }
 
 <STRING>\"  {
-    cool_yylval.symbol = stringtable.add_string(string_buf_ptr);
+    cool_yylval.symbol = stringtable.add_string(string_buf);
     clean_buf();
     BEGIN(INITIAL);
     return STR_CONST;
-}
-<STRING>\n {
-    cool_yylval.error_msg = "Unterminated string constant";
-    clean_buf();
-    curr_lineno++;
-    return ERROR;
 }
 <STRING,SPEC_CHAR>\0    {
     cool_yylval.error_msg = "String contains null character";
@@ -203,6 +201,13 @@ f(?i:alse) { cool_yylval.boolean = false; return (BOOL_CONST); }
 <STRING,SPEC_CHAR><<EOF>>     {
     cool_yylval.error_msg = "EOF in string constant";
     clean_buf();
+    BEGIN(INITIAL);
+    return ERROR;
+}
+<STRING>\n {
+    cool_yylval.error_msg = "Unterminated string constant";
+    clean_buf();
+    curr_lineno++;
     BEGIN(INITIAL);
     return ERROR;
 }
@@ -247,13 +252,13 @@ f(?i:alse) { cool_yylval.boolean = false; return (BOOL_CONST); }
 }
 
 <STRING>. {
-    ++len_string;
     if(len_string + 1 >= MAX_STR_CONST){
         cool_yylval.error_msg = "String constant too long";
         clean_buf();
         BEGIN(RESUM_STRING);
         return ERROR;
     } else {
+        ++len_string;
         strcat(string_buf, yytext);
     }
 }
@@ -274,7 +279,7 @@ f(?i:alse) { cool_yylval.boolean = false; return (BOOL_CONST); }
 
     /* **************** others ************ */
 
-\n    { curr_lineno++; }
+\n    {curr_lineno++;}
 
 {ws}  {} 
 .   {

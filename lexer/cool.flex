@@ -72,6 +72,7 @@ symbol        [\.\;\,\+\-\*\/\~\(\)\{\}\=\@\<\:]
 %x DASH_COM
 %x NESTED_COM
 %x RESUM_STRING
+%x SPEC_CHAR
 
      
 %%
@@ -128,63 +129,12 @@ f(?i:alse) { cool_yylval.boolean = false; return (BOOL_CONST); }
     cool_yylval.symbol = stringtable.add_string(yytext);
     return (OBJECTID);
 }
-    /* **************** Beginning of string lexing *************** */
-
-\" {
-    string_buf_ptr = string_buf;
-    len_string = 0; 
-    BEGIN(STRING); }
-
-<STRING>\"  {
-    cool_yylval.symbol = stringtable.add_string(string_buf_ptr);
-    clean_buf();
-    BEGIN(INITIAL);
-    return STR_CONST;
-}
-<STRING>\n {
-    cool_yylval.error_msg = "Unterminated string constant";
-    clean_buf();
-    curr_lineno++;
-    return ERROR;
-}
-<STRING>\0 {
-    cool_yylval.error_msg = "String contains null character";
-    clean_buf();
-    BEGIN(RESUM_STRING);
-    return ERROR;
-}
-<STRING><<EOF>> {
-    cool_yylval.error_msg = "EOF in string constant";
-    clean_buf();
-    BEGIN(INITIAL);
-    return ERROR;
-}
-<STRING>. {
-    ++len_string;
-    if(len_string + 1 >= MAX_STR_CONST){
-        cool_yylval.error_msg = "String constant too long";
-        BEGIN(RESUM_STRING);
-        return ERROR;
-    } else {
-        strcat(string_buf, yytext);
-    }
-}
-<RESUM_STRING>\" {
-    BEGIN(INITIAL);
-}
-<RESUM_STRING>\n {
-    curr_lineno++;
-    BEGIN(INITIAL);
-}
-    /* if the new line is escaped we still inside the string */
-<RESUM_STRING>\\\n {
-    curr_lineno++;
-}
-<RESUM_STRING>. {}
 
     /* ***************** Dashed comments *********************** */
 
-"--" { BEGIN(DASH_COM); }
+"--" { 
+    BEGIN(DASH_COM); 
+}
 
 <DASH_COM>\n {
     curr_lineno++;
@@ -219,8 +169,108 @@ f(?i:alse) { cool_yylval.boolean = false; return (BOOL_CONST); }
 
 "*)" {
     cool_yylval.error_msg = "Unmatched *)";
+    BEGIN(INITIAL);
     return ERROR;
 }
+
+
+    /* **************** Beginning of string lexing *************** */
+
+\" {
+    string_buf_ptr = string_buf;
+    len_string = 0; 
+    BEGIN(STRING); 
+}
+
+<STRING>\"  {
+    cool_yylval.symbol = stringtable.add_string(string_buf_ptr);
+    clean_buf();
+    BEGIN(INITIAL);
+    return STR_CONST;
+}
+<STRING>\n {
+    cool_yylval.error_msg = "Unterminated string constant";
+    clean_buf();
+    curr_lineno++;
+    return ERROR;
+}
+<STRING,SPEC_CHAR>\0    {
+    cool_yylval.error_msg = "String contains null character";
+    clean_buf();
+    BEGIN(RESUM_STRING);
+    return ERROR;
+}
+<STRING,SPEC_CHAR><<EOF>>     {
+    cool_yylval.error_msg = "EOF in string constant";
+    clean_buf();
+    BEGIN(INITIAL);
+    return ERROR;
+}
+<STRING>\\ {
+    if (len_string + 1 >= MAX_STR_CONST){
+        cool_yylval.error_msg = "String constant too long";
+        clean_buf();
+        BEGIN(RESUM_STRING);
+        return ERROR;
+    } else {
+        ++len_string;
+        BEGIN(SPEC_CHAR); 
+    }
+}
+
+    /* ************** handling special chars in strings ************* */
+<SPEC_CHAR>{
+    b   { strcat(string_buf, "\b"); BEGIN(STRING); }
+    t   { strcat(string_buf, "\t"); BEGIN(STRING); }
+    f   { strcat(string_buf, "\f"); BEGIN(STRING); }
+    n   { strcat(string_buf, "\n"); BEGIN(STRING); }
+    \   { strcat(string_buf, "\\"); BEGIN(STRING); }
+
+    \n  {
+        /* escaped newline allowed in strings */
+        if (len_string + 1 >= MAX_STR_CONST){
+            cool_yylval.error_msg = "String constant too long";
+            clean_buf();
+            BEGIN(RESUM_STRING);
+            return ERROR;
+        } else {
+            ++len_string;
+            curr_lineno++;
+            strcat(string_buf, yytext);
+            BEGIN(STRING);
+        }
+    }
+    .   {
+        strcat(string_buf, yytext);
+        BEGIN(STRING);
+    }
+}
+
+<STRING>. {
+    ++len_string;
+    if(len_string + 1 >= MAX_STR_CONST){
+        cool_yylval.error_msg = "String constant too long";
+        clean_buf();
+        BEGIN(RESUM_STRING);
+        return ERROR;
+    } else {
+        strcat(string_buf, yytext);
+    }
+}
+
+<RESUM_STRING>\" {
+    BEGIN(INITIAL);
+}
+<RESUM_STRING>\n    {
+    curr_lineno++;
+    BEGIN(INITIAL);
+}
+
+<RESUM_STRING>\\\n {
+    curr_lineno++;
+}
+
+<RESUM_STRING>. {}
 
     /* **************** others ************ */
 
@@ -235,5 +285,6 @@ f(?i:alse) { cool_yylval.boolean = false; return (BOOL_CONST); }
 %%
 
 void clean_buf(){
-    *string_buf_ptr = '\0';
+    /* *string_buf_ptr = '\0';  */
+    string_buf[0] = '\0';
 }

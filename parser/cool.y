@@ -135,10 +135,28 @@
     %type <class_> class
     
     /* You will want to change the following line. */
-    %type <features> dummy_feature_list
+    %type <features> optional_feature_list
+    %type <features> feature_list
+    %type <feature> feature
+    %type <formals> optional_formal_list
+    %type <formals> formal_list
+    %type <formal> formal
+    %type <expressions> optional_expression_list
+    %type <expressions> expression_list
+    %type <expression> expression
+
     
     /* Precedence declarations go here. */
-    
+    %right ASSIGN
+    %left NOT
+    %nonassoc '<=' '<' '='
+    %left '+' '-'
+    %left '*' '/'
+    %left ISVOID
+    %left '~'
+    %left '@'
+    %left '.'
+
     
     %%
     /* 
@@ -157,16 +175,24 @@
     ;
     
     /* If no parent is specified, the class inherits from the Object class. */
-    class	: CLASS TYPEID '{' dummy_feature_list '}' ';'
-    { $$ = class_($2,idtable.add_string("Object"),$4,
-    stringtable.add_string(curr_filename)); }
-    | CLASS TYPEID INHERITS TYPEID '{' dummy_feature_list '}' ';'
-    { $$ = class_($2,$4,$6,stringtable.add_string(curr_filename)); }
-    ;
+    class	: CLASS TYPEID '{' optional_feature_list '}' ';'
+              { $$ = class_($2,idtable.add_string("Object"),$4,
+                            stringtable.add_string(curr_filename)); }
+          | CLASS TYPEID INHERITS TYPEID '{' optional_feature_list '}' ';'
+              { $$ = class_($2,$4,$6,stringtable.add_string(curr_filename)); };
     
     /* Feature list may be empty, but no empty features in list. */
-    dummy_feature_list:		/* empty */
-    {  $$ = nil_Features(); }
+    optional_feature_list:		/* empty */
+            {  $$ = nil_Features(); }
+          |  feature_least { $$ = $1; }
+    
+    feature_list: feature ';' { $$ = single_Features($1); }
+                | feature_list feature ';' { append_Features($1, single_Features($2)); }
+    
+    feature: OBJECTID '(' formal_list ')' ':' TYPEID '{' expression '}' { $$ = method($1, $3, $6, $8); }
+           | OBJECTID ':' TYPEID ASSIGN expression { $$ = attr($1, $3, $5); }
+           | OBJECTID ':' TYPEPID { $$ = attr($1, $3, no_expr()); } /* attributes with no values */
+
     
     
     /* end of grammar */

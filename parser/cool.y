@@ -144,12 +144,14 @@
     %type <expressions> optional_expression_list
     %type <expressions> expression_list
     %type <expression> expression
+    %type <expression> let_expression
+    %type <cases> case_list
 
     
     /* Precedence declarations go here. */
     %right ASSIGN
     %left NOT
-    %nonassoc '<=' '<' '='
+    %nonassoc LE '<' '='
     %left '+' '-'
     %left '*' '/'
     %left ISVOID
@@ -181,18 +183,128 @@
           | CLASS TYPEID INHERITS TYPEID '{' optional_feature_list '}' ';'
               { $$ = class_($2,$4,$6,stringtable.add_string(curr_filename)); };
     
+    /* 
+     * class error handling
+     * If there is an error in a class definition but the class is terminated properly and the next class is
+     * syntactically correct, the parser should be able to restart at the next class definition.
+     * lookeahead token must be discarded before returning NULL during error encounter 
+    */
+          | CLASS TYPEID '{' error '}' ';' { yyclearin; $$ = NULL; } /* free the lookahead token before discarding */
+          | CLASS error '{' optional_feature_list '}' ';' { yyclearin; $$ = NULL; }
+          | CLASS error '{' error '}' ';' { yyclearin, $$ = NULL; }
+          ;
+    
+
+    
     /* Feature list may be empty, but no empty features in list. */
     optional_feature_list:		/* empty */
             {  $$ = nil_Features(); }
-          |  feature_least { $$ = $1; }
+          |  feature_list { $$ = $1; }
     
     feature_list: feature ';' { $$ = single_Features($1); }
                 | feature_list feature ';' { append_Features($1, single_Features($2)); }
-    
-    feature: OBJECTID '(' formal_list ')' ':' TYPEID '{' expression '}' { $$ = method($1, $3, $6, $8); }
-           | OBJECTID ':' TYPEID ASSIGN expression { $$ = attr($1, $3, $5); }
-           | OBJECTID ':' TYPEPID { $$ = attr($1, $3, no_expr()); } /* attributes with no values */
+                
+                /* error handling features */
 
+                | error ';' { yyclearin; $$ = NULL; }
+                | error feature ';' { yyclearin; $$ = NULL; }
+    
+    feature: OBJECTID '(' optional_formal_list ')' ':' TYPEID '{' expression '}' { $$ = method($1, $3, $6, $8); }
+           | OBJECTID ':' TYPEID ASSIGN expression { $$ = attr($1, $3, $5); }
+           | OBJECTID ':' TYPEID { $$ = attr($1, $3, no_expr()); } /* attributes with no values */
+    
+    optional_formal_list:     /* empty */
+            { $$ = nil_Formals(); }
+          | formal_list { $$ = $1; }
+    
+    formal_list: formal ',' { $$ = single_Formals($1); }
+          | formal_list formal ',' { $$ = append_Formals($1, single_Formals($2)); }
+    
+    formal: OBJECTID ':' TYPEID { $$ = formal($1, $3); }
+
+    expression: OBJECTID ASSIGN expression { $$ = assign($1, $3); }
+          | expression '.' OBJECTID '(' optional_expression_list ')' { $$ = dispatch($1, $3, $5); }
+          | OBJECTID '(' optional_expression_list ')' { $$ = dispatch(object(idtable.add_string("self")), $1, $3); }
+          | expression '@' TYPEID '.' OBJECTID '(' optional_expression_list ')' { $$ = static_dispatch($1, $3, $5, $7); }
+          
+          /* conditions */
+
+          | IF expression THEN expression ELSE expression FI { $$ = cond($2, $4, $6); }
+
+          /* loop */
+
+          | WHILE expression LOOP expression POOL { $$ = loop($2, $4); }
+
+          /* block */
+
+          | '{' expression_list '}' { $$ = block($2); }
+
+          /* LET construction */
+
+          | LET OBJECTID ':' TYPEID IN expression { $$ = let($2, $4, no_expr(), $6); }
+          | LET OBJECTID ':' TYPEID ASSIGN expression IN expression { $$ = let($2, $4, $6, $8); }
+          | LET OBJECTID ':' TYPEID ',' let_expression { $$ = let($2, $4, no_expr(), $6); }
+          | LET OBJECTID ':' TYPEID ASSIGN expression ',' let_expression { let($2, $4, $6, $8); }
+
+          /* error handling in let expression */
+          | LET error IN expression { yyclearin; $$ = NULL; }
+
+          /* Case construction */
+          
+          | CASE expression OF case_list ESAC { $$ = typcase($2, $4); }
+          
+          /* New construction */
+
+          | NEW TYPEID { $$ = new_($2); }
+
+          /* operators */
+
+          | ISVOID expression { $$ = isvoid($2); }
+          | expression '+' expression { $$ = plus($1, $3); }
+          | expression '-' expression { $$ = sub($1, $3); }
+          | expression '*' expression { $$ = mul($1, $3); }
+          | expression '/' expression { $$ = divide($1, $3); }
+          | '~' expression { $$ = neg($2); }
+          | expression '<' expression { $$ = lt($1, $3); }
+          | expression LE expression { $$ = leq($1, $3); }
+          | expression '=' expression { $$ = eq($1, $3); }
+          | NOT expression { $$ = comp($2); }
+          
+          /* others */
+          | '(' expression ')' { $$ = $2; }
+          | OBJECTID { $$ = object($1); }
+          | INT_CONST { $$ = int_const($1); }
+          | STR_CONST { $$ = string_const($1); }
+          | BOOL_CONST  { $$ = bool_const($1); }
+
+    /* These are expressions separated by comma. They can have 0 expression.*/
+    optional_expression_list: /* empty */ { $$ = nil_Expressions(); }
+          | expression { $$ = single_Expressions($1); }
+          | optional_expression_list ',' expression { $$ = append_Expressions($1, single_Expressions($3)); }
+    
+    /* These are expressions separated by semi colon . There must be at least 1 expression*/
+    expression_list: expression ';' { $$ = single_Expressions($1); }
+          | expression_list ';' expression { $$ = append_Expressions($1, single_Expressions($3)); }
+
+          /* error handling in expression list */
+
+          | error ';' { yyclearin; $$ = NULL; }
+          | error expression ';' { yyclearin, $$ = NULL; }
+    
+    /* let_expression construction */
+    let_expression: OBJECTID ':' TYPEID let_expression { $$ = let($1, $3, no_expr(), $4); }
+          | OBJECTID ':' TYPEID IN expression { $$ = let($1, $3, no_expr(), $5); }
+          | OBJECTID ':' TYPEID ASSIGN expression let_expression { $$ = let($1, $3, $5, $6); }
+          | OBJECTID ':' TYPEID ASSIGN expression IN expression { $$ = let($1, $3, $5, $7); }
+
+          /* Error handling in let_expression */
+          | error IN expression { yyclearin; $$ = NULL; }
+          | error let_expression { yyclearin; $$ = NULL; }
+
+    /* case_list construction */
+    case_list: OBJECTID ':' TYPEID DARROW expression ';' { $$ = single_Cases(branch($1, $3, $5)); }
+          |  case_list OBJECTID ':' TYPEID DARROW expression
+                                  { $$ = append_Cases($1, single_Cases(branch($2, $4, $6))); }
     
     
     /* end of grammar */

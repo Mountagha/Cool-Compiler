@@ -188,6 +188,13 @@ void ClassTable::install_basic_classes() {
 						      Str, 
 						      no_expr()))),
 	       filename);
+    
+    // add these base classes to the class_table
+    this->ctable.addid(Object->get_string, Object_class);
+    this->ctable.addid(IO->get_string(), IO_class);
+    this->ctable.addid(Int->get_string(), Int_class);
+    this->ctable.addid(Bool->get_string(), Bool_class);
+    this->ctable.addid(Str->get_string(), Str_class);
 }
 
 ////////////////////////////////////////////////////////////////////

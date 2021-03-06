@@ -24,8 +24,10 @@ private:
   int semant_errors;
   void install_basic_classes();
   ostream& error_stream;
+  Classes classes_list;    // all the classes of the program
 
 public:
+  SymbolTable<Symbol, Class__class> ctable;
   ClassTable(Classes);
   int errors() { return semant_errors; }
   ostream& semant_error();

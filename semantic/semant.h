@@ -26,6 +26,8 @@ private:
   ostream& error_stream;
   Classes classes_list;    // all the classes of the program
 
+  void construct_ctable();
+
 public:
   SymbolTable<Symbol, Class__class> ctable;
   ClassTable(Classes);

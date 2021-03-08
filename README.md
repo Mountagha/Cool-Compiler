@@ -21,6 +21,6 @@ class Main inherits IO {
 ```
 
 ### Next
-* Use [LLVM](https://llvm.org/) to generate code therefore support more architecture
+* Use [LLVM](https://llvm.org/) to generate code therefore support more architectures
 * Refactor the code to support modern cpp programming style
 * Code my own lexer and parser in place of using existing tools

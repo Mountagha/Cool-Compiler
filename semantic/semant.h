@@ -27,6 +27,8 @@ private:
   Classes classes_list;    // all the classes of the program
 
   void construct_ctable();
+  void check_parents();
+  bool check_DAG();
 
 public:
   SymbolTable<Symbol, Class__class> ctable;
@@ -35,6 +37,7 @@ public:
   ostream& semant_error();
   ostream& semant_error(Class_ c);
   ostream& semant_error(Symbol filename, tree_node *t);
+  void check_inheritance();
 };
 
 

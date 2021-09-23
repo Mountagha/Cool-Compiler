@@ -7,9 +7,10 @@ RUN apt install -y \
     csh  \
     build-essential
 RUN mkdir /usr/class
-RUN chown $USER /usr/class
+RUN chown $USER:$USER /usr/class
 COPY cs143 /usr/class/
-WORKDIR ~/cool
-RUN ln -s /usr/class/cs143/cool 
+WORKDIR /usr/class/cs143
+RUN ln -s /usr/class/cs143/cool ~/cool 
+
 RUN PATH=/usr/class/cs143/cool/bin:$PATH
-CMD /bin/bash
+# CMD /bin/bash
